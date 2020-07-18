@@ -1,0 +1,2 @@
+rootProject.name='MemoGram'
+include ':app'

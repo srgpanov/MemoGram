@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">MemoGram</string>
+
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="memes">Мемы</string>
+    <string name="btn_add_text">+add text</string>
+</resources>
