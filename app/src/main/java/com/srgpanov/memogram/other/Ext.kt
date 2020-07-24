@@ -101,6 +101,7 @@ fun View.requestApplyInsetsWhenAttached() {
 fun dpToPx(dp:Int):Int{
     return (dp*Resources.getSystem().displayMetrics.density).toInt()
 }
+
 fun pxToDp(px: Int): Int {
     return (px / Resources.getSystem().displayMetrics.density).toInt()
 }
@@ -125,8 +126,7 @@ fun MotionEvent.toPoint(point: Point):Point{
 
 
 
-inline fun <reified T> T.getClassSimpleName(enclosingClass: KClass<*>?): String =
-
+inline fun <reified T> T.getClassSimpleName( enclosingClass: KClass<*>?): String =
     if(T::class.java.simpleName.isNotBlank()) {
         T::class.java.simpleName
     }

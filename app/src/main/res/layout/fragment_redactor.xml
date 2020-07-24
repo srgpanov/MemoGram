@@ -26,15 +26,17 @@
         app:layout_constraintTop_toBottomOf="@id/status_view"
         />
     <EditText
-        android:id="@+id/tv_signature"
+        android:id="@+id/et_signature"
         android:layout_width="0dp"
         android:layout_height="@dimen/memes_redactor_tv_height"
         android:paddingStart="8dp"
         android:paddingEnd="8dp"
-        android:singleLine="true"
+        android:hint="@string/et_signature_auto_fill_hints"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toStartOf="@id/ib_text_setup"
-        app:layout_constraintTop_toBottomOf="@id/toolbar"/>
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        android:autofillHints="@string/et_signature_auto_fill_hints"
+        android:inputType="text" />
 
     <ImageButton
         android:id="@+id/ib_text_setup"
@@ -42,23 +44,20 @@
         android:layout_height="@dimen/memes_redactor_tv_height"
         android:layout_marginStart="4dp"
         android:layout_marginEnd="4dp"
-        app:layout_constraintTop_toTopOf="@id/tv_signature"
-        app:layout_constraintBottom_toBottomOf="@id/tv_signature"
+        app:layout_constraintTop_toTopOf="@id/et_signature"
+        app:layout_constraintBottom_toBottomOf="@id/et_signature"
         app:layout_constraintEnd_toStartOf="@id/ib_text_color"
-        />
+        tools:ignore="ContentDescription" />
     <ImageButton
         android:id="@+id/ib_text_color"
         android:layout_width="@dimen/memes_redactor_tv_height"
         android:layout_height="@dimen/memes_redactor_tv_height"
         android:layout_marginStart="4dp"
         android:layout_marginEnd="4dp"
-        app:layout_constraintTop_toTopOf="@id/tv_signature"
-        app:layout_constraintBottom_toBottomOf="@id/tv_signature"
+        app:layout_constraintTop_toTopOf="@id/et_signature"
+        app:layout_constraintBottom_toBottomOf="@id/et_signature"
         app:layout_constraintEnd_toStartOf="@id/ib_text_lock"
-        />
-
-
-
+        tools:ignore="ContentDescription" />
     <ImageButton
         android:id="@+id/ib_text_lock"
         android:layout_width="@dimen/memes_redactor_tv_height"
@@ -66,10 +65,9 @@
         android:layout_marginStart="4dp"
         android:layout_marginEnd="4dp"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="@id/tv_signature"
-        app:layout_constraintBottom_toBottomOf="@id/tv_signature"
-
-        />
+        app:layout_constraintTop_toTopOf="@id/et_signature"
+        app:layout_constraintBottom_toBottomOf="@id/et_signature"
+        tools:ignore="ContentDescription" />
     <com.srgpanov.memogram.ui.views.RedactorMemView
         android:id="@+id/mem_view"
         android:layout_width="0dp"
@@ -77,7 +75,7 @@
         android:src="@drawable/ideal_balance_"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tv_signature"
+        app:layout_constraintTop_toBottomOf="@id/et_signature"
         app:layout_constraintBottom_toTopOf="@id/btn_add_text"
         />
     <Button

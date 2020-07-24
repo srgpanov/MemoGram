@@ -17,12 +17,9 @@ import kotlin.math.roundToInt
 
 
 class RedactorContainer(
-    bitmap: Bitmap,
-    widthView: Int,
-    heightView: Int
+    val drawingRect: DrawingRect
 ) {
-    var drawingRect= DrawingRect(bitmap,widthView,heightView)
-    var drawnState = false
+    var isDrawState = false
     var removeFlag = false
 
     private var touchX = 0f
@@ -38,15 +35,19 @@ class RedactorContainer(
 
     private var touchState = TouchState.MOVE
 
-    private val blueColor = App.instance.resources.getColor(R.color.primary)
-    private val whiteColor = App.instance.resources.getColor(R.color.white)
+    private var isMoveState=false
+    private val containerInCenter:Boolean
+        get()=isMoveState&&drawingRect.drawCenterLine
+
+    private val blueColor =  App.instance.colorRes(R.color.primary)
 
     private val greenPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val bluePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val blueStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val blueCenterLinePaint = Paint()
+
     private val whitePaint: Paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-    private val magentaPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val pathCircle = Path()
     private val pathRect = Path()
     private val removeDrawable = App.instance.getDrawable(R.drawable.ic_cross)
@@ -57,17 +58,6 @@ class RedactorContainer(
     private val iconMatrix = Matrix()
     private val borderOffset = dpToPx(2).toFloat()
     private val iconSize = dpToPx(12)
-
-
-    companion object {
-        fun getBitmapRect(bitmap: Bitmap, width: Int, height: Int): RectF {
-            val left = width / 2f - bitmap.width / 2
-            val top = height / 2f - bitmap.height / 2
-            val right = left + bitmap.width
-            val bottom = top + bitmap.height
-            return RectF(left, top, right, bottom)
-        }
-    }
 
     init {
         greenPaint.color = Color.GREEN
@@ -80,6 +70,8 @@ class RedactorContainer(
         blueStrokePaint.pathEffect = DashPathEffect(
             floatArrayOf(dpToPx(10).toFloat(), dpToPx(5).toFloat()), 0f
         )
+        blueCenterLinePaint.color = blueColor
+        blueCenterLinePaint.strokeWidth = dpToPx(1).toFloat()
         whitePaint.color = Color.WHITE
         whitePaint.style = Paint.Style.STROKE
         whitePaint.strokeWidth = dpToPx(2) * 0.75f
@@ -90,17 +82,38 @@ class RedactorContainer(
 
     fun draw(canvas: Canvas) {
         drawingRect.draw(canvas)
-        if (!drawnState) {
+        if (!isDrawState) {
             canvas.drawPath(pathDotted, blueStrokePaint)
             canvas.drawPath(pathCircle, bluePaint)
-            canvas.withRotation(drawingRect.rotation,drawingRect.leftTop.x,drawingRect.leftTop.y) {
+            canvas.withRotation(
+                drawingRect.rotation,
+                drawingRect.leftTop.x,
+                drawingRect.leftTop.y
+            ) {
                 removeDrawable?.draw(canvas)
             }
-            canvas.withRotation(drawingRect.rotation,drawingRect.rightIop.x,drawingRect.rightIop.y) {
+            canvas.withRotation(
+                drawingRect.rotation,
+                drawingRect.rightIop.x,
+                drawingRect.rightIop.y
+            ) {
                 rotateDrawable?.draw(canvas)
             }
-            canvas.withRotation(drawingRect.rotation,drawingRect.rightBottom.x,drawingRect.rightBottom.y) {
+            canvas.withRotation(
+                drawingRect.rotation,
+                drawingRect.rightBottom.x,
+                drawingRect.rightBottom.y
+            ) {
                 resizeDrawable?.draw(canvas)
+            }
+            if (containerInCenter) {
+                canvas.drawLine(
+                    canvas.width / 2f,
+                    0f,
+                    canvas.width / 2f,
+                    canvas.height.toFloat(),
+                    blueCenterLinePaint
+                )
             }
         }
     }
@@ -115,20 +128,17 @@ class RedactorContainer(
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 when {
-                    isInsideArc(event.toPoint(), drawingRect.rightIop.toPoint()) && !drawnState -> {
+                    isRotateTouch(event) -> {
                         startAngle = getRotateAngle(touchX, touchY)
                         touchState = TouchState.ROTATE
                         return true
                     }
-                    isInsideArc(
-                        event.toPoint(),
-                        drawingRect.rightBottom.toPoint()
-                    ) && !drawnState -> {
+                    isResizeTouch(event) -> {
                         drawingRect.setTouchOffset(touchX, touchY)
                         touchState = TouchState.RESIZE
                         return true
                     }
-                    isInsideArc(event.toPoint(), drawingRect.leftTop.toPoint()) && !drawnState -> {
+                    isCloseTouch(event) -> {
                         removeFlag = true
                         return true
                     }
@@ -141,22 +151,49 @@ class RedactorContainer(
             MotionEvent.ACTION_MOVE -> {
                 when (touchState) {
                     TouchState.MOVE -> {
+                        isMoveState=true
                         drawingRect.offset(deltaX, deltaY)
                     }
                     TouchState.RESIZE -> {
                         drawingRect.changeDimensions(touchX, touchY)
                     }
                     TouchState.ROTATE -> {
-                        rotateAngle = getRotateAngle(touchX, touchY) - startAngle
-                        drawingRect.rotation += rotateAngle
-                        startAngle = getRotateAngle(touchX, touchY)
+                        rotateRect()
                     }
                 }
                 updatePaths()
                 return true
             }
+            MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL->{
+                isMoveState=false
+                return true
+            }
         }
         return false
+    }
+
+    private fun isCloseTouch(event: MotionEvent) =
+        isInsideArc(event.toPoint(), drawingRect.leftTop.toPoint()) && !isDrawState
+
+    private fun isResizeTouch(event: MotionEvent): Boolean {
+        return isInsideArc(
+            event.toPoint(),
+            drawingRect.rightBottom.toPoint()
+        ) && !isDrawState
+    }
+
+    private fun isRotateTouch(event: MotionEvent): Boolean {
+        return isInsideArc(
+            event.toPoint(),
+            drawingRect.rightIop.toPoint()
+        ) && !isDrawState
+    }
+
+    private fun rotateRect() {
+        val rotation = getRotateAngle(touchX, touchY)
+        rotateAngle = rotation - startAngle
+        drawingRect.addRotation(rotateAngle)
+        startAngle = rotation
     }
 
 
@@ -164,7 +201,7 @@ class RedactorContainer(
         val distance =
             ((touchedPoint.x - centerPoint.x.toDouble()).pow(2.0) +
                     (touchedPoint.y - centerPoint.y.toDouble()).pow(2.0)).roundToInt()
-        return distance < Math.pow(iconRadius.toDouble(), 2.0)
+        return distance < iconRadius.toDouble().pow(2.0)
     }
 
     private fun updatePaths() {
@@ -191,12 +228,11 @@ class RedactorContainer(
         iconMatrix.setTranslate(drawingRect.leftTop.x, drawingRect.leftTop.y)
         iconMatrix.postRotate(drawingRect.rotation, drawingRect.leftTop.x, drawingRect.leftTop.y)
         var point = drawingRect.leftTop.toPoint()
-        val rect =Rect()
-        removeDrawable?.bounds = rect.squareFromPoint(point,iconSize)
-        point=drawingRect.rightIop.toPoint()
-        rotateDrawable?.bounds = rect.squareFromPoint(point, (iconSize*1.5f).toInt())
-        point=drawingRect.rightBottom.toPoint()
-        resizeDrawable?.bounds = rect.squareFromPoint(point,iconSize)
+        removeDrawable?.bounds = squareFromPoint(point, iconSize)
+        point = drawingRect.rightIop.toPoint()
+        rotateDrawable?.bounds = squareFromPoint(point, (iconSize * 1.5f).toInt())
+        point = drawingRect.rightBottom.toPoint()
+        resizeDrawable?.bounds = squareFromPoint(point, iconSize)
 
         setupDottedPath()
         iconMatrix.setRotate(drawingRect.rotation, drawingRect.center.x, drawingRect.center.y)
@@ -207,7 +243,7 @@ class RedactorContainer(
 
     private fun setupDottedPath() {
         pathDotted.reset()
-        val rect = RectF(drawingRect.rectF)
+        val rect = RectF(drawingRect.drawRect)
         rect.inset(-borderOffset, -borderOffset)
         pathDotted.moveTo(rect.left, rect.top)
         pathDotted.lineTo(rect.right, rect.top)
@@ -234,17 +270,15 @@ class RedactorContainer(
                 targetPt.x.toDouble() - centerPt.x
             )
         ).toFloat()
-
         if (angle < 0) {
             angle += 360f
         }
-
         return angle
     }
 
 
     enum class TouchState {
-        MOVE, RESIZE, ROTATE,
+        MOVE, RESIZE, ROTATE
     }
 
 

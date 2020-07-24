@@ -1,13 +1,17 @@
 package com.srgpanov.memogram.ui.views
 
+import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.*
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Rect
 import android.util.AttributeSet
 import android.util.Log
 import android.view.MotionEvent
 import androidx.appcompat.widget.AppCompatImageView
-import com.srgpanov.memogram.other.dpToPx
+import androidx.core.graphics.toRectF
 import java.util.*
+import java.util.concurrent.atomic.AtomicLong
 
 
 class RedactorMemView @JvmOverloads constructor(
@@ -17,69 +21,85 @@ class RedactorMemView @JvmOverloads constructor(
         const val TAG = "RedactorMemView"
     }
 
-    var memText = "Ideal balance etalon garmony"
-    lateinit var bitmap: Bitmap
-    var textRect = RectF(20f, 20f, 420f, 220f)
-    private var touchX = 0f
-    private var touchY = 0f
-    private var iconRadius = dpToPx(12)
-    private var widthView = 100
-    private var heightView = 100
+    var onTextContainerSelectedListener: OnTextContainerSelectedListener? = null
 
-    var deltaX = 0f
-    var deltaY = 0f
-    var oldX = 0f
-    var oldY = 0f
+    private var viewWidth = 100
+    private var viewHeight = 100
+
     private var handlerContainer: RedactorContainer? = null
 
-    private val containers: MutableList<RedactorContainer> = LinkedList<RedactorContainer>()
+    private val containers: MutableList<RedactorContainer> = LinkedList()
+    private val aLong = AtomicLong()
+    private val nextId: Long
+        get() = aLong.incrementAndGet()
 
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        widthView = w
-        heightView = h
+        Log.d("RedactorMemView", "onSizeChanged: $w $h")
+        viewWidth = w
+        viewHeight = h
     }
 
 
-
+    @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.action) {
-            MotionEvent.ACTION_DOWN -> {
-                Log.d(TAG, "onTouchEvent: handlerContainer ${handlerContainer?.drawnState}")
-                var needInvalidate= false
-                for (i in containers.size - 1 downTo 0) {
-                    if (containers[i].handleMotionEvent(event)) {
-                        if (containers[i].removeFlag){
-                            containers.remove(containers[i])
-                            invalidate()
-                            return true
-                        }
-                        handlerContainer = containers[i]
-                        handlerContainer?.drawnState = false
-                        containers.add(containers[i])
-                        containers.removeAt(i)
-                        invalidate()
-                        return true
-                    }else{
-                        if (!containers[i].drawnState){
-                            needInvalidate=true
-                            containers[i].drawnState=true
-                        }
-                    }
-                }
-                if (needInvalidate)invalidate()
-            }
-            MotionEvent.ACTION_MOVE -> {
-                if (handlerContainer!=null){
-                    handlerContainer?.handleMotionEvent(event)
+        return when (event.action) {
+            MotionEvent.ACTION_DOWN -> performActionDown(event)
+            MotionEvent.ACTION_MOVE -> performActionMoveCancelAndUp(event)
+            MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_UP -> performActionMoveCancelAndUp(event)
+            else -> false
+        }
+    }
+
+    private fun performActionMoveCancelAndUp(event: MotionEvent): Boolean {
+        if (handlerContainer != null) {
+            handlerContainer?.handleMotionEvent(event)
+            invalidate()
+        }
+        return true
+    }
+
+    private fun performActionDown(event: MotionEvent): Boolean {
+        for (i in containers.size - 1 downTo 0) {
+            if (containers[i].handleMotionEvent(event)) {
+                if (checkRemove(i)) return true
+                selectContainer(i)
+                elevateContainer(i)
+                invalidate()
+                return true
+            } else {
+                if (!containers[i].isDrawState) {
+                    containers[i].isDrawState = true
                     invalidate()
                 }
-                return true
             }
-
-
         }
+        onTextContainerSelectedListener?.onNothingSelected()
+        return false
+    }
 
+    private fun selectContainer(index: Int) {
+        handlerContainer = containers[index]
+        handlerContainer?.isDrawState = false
+        val textRect = handlerContainer?.drawingRect as? TextRect
+        if (textRect != null) {
+            onTextContainerSelectedListener?.onContainerSelected(textRect.id,textRect.text )
+        }else{
+            onTextContainerSelectedListener?.onNothingSelected()
+        }
+    }
+
+    private fun elevateContainer(index: Int) {
+        containers.add(containers[index])
+        containers.removeAt(index)
+    }
+
+    private fun checkRemove(i: Int): Boolean {
+        if (containers[i].removeFlag) {
+            containers.remove(containers[i])
+            invalidate()
+            return true
+        }
         return false
     }
 
@@ -89,35 +109,46 @@ class RedactorMemView @JvmOverloads constructor(
         containers.forEach {
             it.draw(canvas)
         }
-        Log.d(TAG, "onDraw: invalidate ")
-
     }
 
     fun addImage(bitmap: Bitmap) {
         val mutableBitmap =
             if (bitmap.isMutable) bitmap else bitmap.copy(Bitmap.Config.ARGB_8888, true)
-        val redactorContainer = RedactorContainer(mutableBitmap,widthView,heightView)
-        handlerContainer?.drawnState = true
-        handlerContainer=redactorContainer
-        containers.add(redactorContainer)
-        invalidate()
-    }
-    fun addText(){
-        val bitmap = Bitmap.createBitmap(500,300,Bitmap.Config.ARGB_8888)
-        val redactorContainer = RedactorContainer(bitmap,widthView,heightView)
-        handlerContainer?.drawnState = true
-        handlerContainer=redactorContainer
+        Log.d("RedactorMemView", "addImage: $viewWidth $viewHeight ")
+        val imageRect = ImageRect.create(nextId, mutableBitmap, viewWidth, viewHeight)
+        val redactorContainer = RedactorContainer(imageRect)
+        handlerContainer?.isDrawState = true
+        handlerContainer = redactorContainer
         containers.add(redactorContainer)
         invalidate()
     }
 
-
-    private fun getBoundsForIcon(pointF: Point): Rect {
-        return Rect(
-            pointF.x - iconRadius,
-            pointF.y - iconRadius,
-            pointF.x + iconRadius,
-            pointF.y + iconRadius
-        )
+    fun addText() {
+        val rect = Rect(400, 400, 600, 600).toRectF()
+        val textRect = TextRect(nextId, rect, viewWidth)
+        val redactorContainer = RedactorContainer(textRect)
+        handlerContainer?.isDrawState = true
+        handlerContainer = redactorContainer
+        containers.add(redactorContainer)
+        onTextContainerSelectedListener?.onContainerSelected(textRect.id,textRect.text)
+        invalidate()
     }
+
+    fun changeText(text: String) {
+        val textRect = handlerContainer?.drawingRect
+        if (textRect is TextRect) {
+            Log.d("RedactorMemView", "changeText: $textRect")
+            textRect.text = text
+            invalidate()
+        } else {
+            throw IllegalStateException("selected not textRect")
+        }
+
+    }
+
+    interface OnTextContainerSelectedListener {
+        fun onContainerSelected(id: Long, text: String)
+        fun onNothingSelected()
+    }
+
 }

@@ -8,18 +8,21 @@ import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
+import android.text.Editable
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import com.srgpanov.memogram.R
 import com.srgpanov.memogram.data.Mem
 import com.srgpanov.memogram.databinding.FragmentRedactorBinding
+import com.srgpanov.memogram.ui.views.RedactorMemView
 
 
 class RedactorFragment : Fragment() {
@@ -67,7 +70,7 @@ class RedactorFragment : Fragment() {
 
     private fun setupListeners() {
         takePicture = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            val selectedImage = it.data?.getData()
+            val selectedImage = it.data?.data
             if (selectedImage != null) {
                 viewModel.takePicture(selectedImage,binding.memView.width/2,binding.memView.width/2)
             }else {
@@ -76,23 +79,39 @@ class RedactorFragment : Fragment() {
 
         }
         binding.btnAddSticker.setOnClickListener {
-            val takePictureIntent: Intent = Intent(Intent.ACTION_PICK)
+            val takePictureIntent = Intent(Intent.ACTION_PICK)
             takePictureIntent.type = "image/*"
             takePicture.launch(takePictureIntent)
         }
+        binding.btnAddText.setOnClickListener {
+            binding.memView.addText()
+            binding.memView.onTextContainerSelectedListener= object : RedactorMemView.OnTextContainerSelectedListener {
+                override fun onContainerSelected(id: Long, text: String) {
+                    Log.d("RedactorFragment", "setupListeners: id $id text $text")
+                    binding.etSignature.setText(text)
+                    binding.etSignature.setSelection(binding.etSignature.text.length)
+                    showTextRedactorPanel()
+                }
+
+                override fun onNothingSelected() {
+                    hideTextRedactorPanel()
+                }
+
+            }
+
+        }
+        binding.etSignature.doAfterTextChanged {editable: Editable? ->
+            binding.memView.changeText(editable.toString())
+        }
     }
 
-
-
-    private fun getPath(uri: Uri): String? {
-        val cursor: Cursor =
-            context?.getContentResolver()?.query(uri, null, null, null, null) ?: return null
-        cursor.moveToFirst()
-        val idx = cursor.getColumnIndex(MediaStore.Images.ImageColumns.DATA)
-        return cursor.getString(idx)
+    private fun showTextRedactorPanel() {
+        binding.etSignature.visibility =View.VISIBLE
     }
 
-
+    private fun hideTextRedactorPanel() {
+        binding.etSignature.visibility =View.INVISIBLE
+    }
 }
 
 
